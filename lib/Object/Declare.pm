@@ -4,7 +4,7 @@ use 5.006;
 use strict;
 use warnings;
 
-$Object::Declare::VERSION = '0.22';
+$Object::Declare::VERSION = '0.23';
 
 sub import {
     my $class       = shift;
