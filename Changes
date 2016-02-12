@@ -1,3 +1,14 @@
+0.23    2016-02-12
+    * Convert the distribution from Module-Install to Dist-Zilla.
+
+    * Start maintaining in a GitHub repository.
+
+    * Add a LICENSE file.
+
+    * Removed trailing whitespace - with a test.
+
+    * Remove the SIGNATURE file - at least temporarily.
+
 0.22    2007-02-09
     * Allow declarations in copula callbacks as return value:
 
