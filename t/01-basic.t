@@ -1,6 +1,6 @@
 use strict;
 use Test::More tests => 3, import => ['is_deeply'];
-use ok 'Object::Declare' => 
+use ok 'Object::Declare' =>
     copula => {
         is  => '',
         are => 'plural_',

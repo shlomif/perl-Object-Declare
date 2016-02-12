@@ -8,7 +8,7 @@ $Object::Declare::VERSION = '0.22';
 
 sub import {
     my $class       = shift;
-    my %args        = ((@_ and ref($_[0])) ? (mapping => $_[0]) : @_) or return; 
+    my %args        = ((@_ and ref($_[0])) ? (mapping => $_[0]) : @_) or return;
     my $from        = caller;
 
     my $mapping     = $args{mapping} or return;
@@ -137,7 +137,7 @@ sub _declare {
     }
 
     my @overridden = map { "$from\::$_" } keys %$mapping;
-    # Now install the collector symbols from class mappings 
+    # Now install the collector symbols from class mappings
     my $toggle_subs = sub {
         foreach my $sym (@overridden) {
             no strict 'refs';
@@ -213,7 +213,7 @@ sub unroll {
     my @unrolled;
 
     unshift @unrolled, pop(@katamari)->unroll
-        while ref($katamari[-1]) eq __PACKAGE__; 
+        while ref($katamari[-1]) eq __PACKAGE__;
 
     if (@katamari == 1) {
         # single value: "is foo"
@@ -303,7 +303,7 @@ that existed before the declarator's execution are restored correctly.
 
 =head1 NOTES
 
-If you export the declarator to another package via C<@EXPORT>, be sure 
+If you export the declarator to another package via C<@EXPORT>, be sure
 to export all mapping keys as well.  For example, this will work for the
 example above:
 
