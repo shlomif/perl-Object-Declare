@@ -6,15 +6,17 @@ use warnings;
 
 our $VERSION = '0.24';
 
-sub import {
-    my $class       = shift;
-    my %args        = ((@_ and ref($_[0])) ? (mapping => $_[0]) : @_) or return;
-    my $from        = caller;
+sub import
+{
+    my $class = shift;
+    my %args  = ( ( @_ and ref( $_[0] ) ) ? ( mapping => $_[0] ) : @_ )
+        or return;
+    my $from = caller;
 
-    my $mapping     = $args{mapping} or return;
-    my $aliases     = $args{aliases}    || {};
-    my $declarator  = $args{declarator} || ['declare'];
-    my $copula      = $args{copula}     || ['is', 'are'];
+    my $mapping    = $args{mapping} or return;
+    my $aliases    = $args{aliases}    || {};
+    my $declarator = $args{declarator} || ['declare'];
+    my $copula     = $args{copula}     || [ 'is', 'are' ];
 
     # Both declarator and copula can contain more than one entries;
     # normalize into an arrayref if we only have on entry.
@@ -22,63 +24,77 @@ sub import {
     $declarator = [$declarator] unless ref($declarator);
     $copula     = [$copula]     unless ref($copula);
 
-    if (ref($mapping) eq 'ARRAY') {
+    if ( ref($mapping) eq 'ARRAY' )
+    {
         # rewrite "MyApp::Foo" into simply "foo"
         $mapping = {
             map {
                 my $helper = $_;
                 $helper =~ s/.*:://;
-                (lc($helper) => $_);
+                ( lc($helper) => $_ );
             } @$mapping
         };
     }
 
     # Convert mapping targets into instantiation closures
-    if (ref($mapping) eq 'HASH') {
-        foreach my $key (keys %$mapping) {
+    if ( ref($mapping) eq 'HASH' )
+    {
+        foreach my $key ( keys %$mapping )
+        {
             my $val = $mapping->{$key};
-            next if ref($val); # already a callback, don't bother
-            $mapping->{$key} = sub { scalar($val->new(@_)) };
+            next if ref($val);    # already a callback, don't bother
+            $mapping->{$key} = sub { scalar( $val->new(@_) ) };
         }
     }
 
-    if (ref($copula) eq 'ARRAY') {
+    if ( ref($copula) eq 'ARRAY' )
+    {
         # add an empty prefix to all copula
-        $copula = { map { $_ => '' } @$copula }
+        $copula = { map { $_ => '' } @$copula };
     }
 
     # Install declarator functions into caller's package, remembering
     # the mapping and copula set for this declarator.
-    foreach my $sym (@$declarator) {
+    foreach my $sym (@$declarator)
+    {
+        ## no critic (ProhibitNoStrict)
         no strict 'refs';
 
         *{"$from\::$sym"} = sub (&) {
-            unshift @_, ($mapping, $copula, $aliases);
+            unshift @_, ( $mapping, $copula, $aliases );
             goto &_declare;
         };
+        ## use critic
     }
 
     # Establish prototypes (same as "use subs") so Sub::Override can work
     {
+        ## no critic (ProhibitNoStrict)
         no strict 'refs';
         _predeclare(
-            (map { "$from\::$_" } keys %$mapping),
-            (map { ("UNIVERSAL::$_", "$_\::AUTOLOAD") } keys %$copula),
+            ( map { "$from\::$_" } keys %$mapping ),
+            ( map { ( "UNIVERSAL::$_", "$_\::AUTOLOAD" ) } keys %$copula ),
         );
+        ## use critic
     }
 }
 
 # Same as "use sub".  All is fair if you predeclare.
-sub _predeclare {
+sub _predeclare
+{
+## no critic (ProhibitNoStrict)
     no strict 'refs';
     no warnings 'redefine';
-    foreach my $sym (@_) {
+    foreach my $sym (@_)
+    {
         *$sym = \&$sym;
     }
+    ## use critic
 }
 
-sub _declare {
-    my ($mapping, $copula, $aliases, $code) = @_;
+sub _declare
+{
+    my ( $mapping, $copula, $aliases, $code ) = @_;
     my $from = caller;
 
     # Table of collected objects.
@@ -88,9 +104,10 @@ sub _declare {
     # restored automagically upon scope exit.
     my %subs_replaced;
     my $replace = sub {
+        ## no critic (ProhibitNoStrict)
         no strict 'refs';
         no warnings 'redefine';
-        my ($sym, $code) = @_;
+        my ( $sym, $code ) = @_;
 
         # Do the "use subs" predeclaration again before overriding, because
         # Sub::Override cannot handle empty symbol slots.  This is normally
@@ -101,96 +118,131 @@ sub _declare {
         # Now replace the symbol for real.
         $subs_replaced{$sym} ||= *$sym{CODE};
         *$sym = $code;
+        ## use critic
     };
 
     # In DSL (domain-specific language) mode; install AUTOLOAD to handle all
     # unrecognized calls for "foo is 1" (which gets translated to "is->foo(1)",
     # and UNIVERSAL to collect "is foo" (which gets translated to "foo->is".
     # The arguments are rolled into a Katamari structure for later analysis.
-    while (my ($sym, $prefix) = each %$copula) {
-        $replace->( "UNIVERSAL::$sym" => sub {
-            # Turn "is some_field" into "some_field is 1"
-            my ($key, @vals) = ref($prefix) ? $prefix->(@_) : ($prefix.$_[0] => 1) or return;
-            # If the copula returns a ready-to-use katamari object,
-            # don't try to roll it by ourself.
-            return $key
-                if ref($key) && ref($key) eq 'Object::Declare::Katamari';
-            $key = $aliases->{$key} if $aliases and exists $aliases->{$key};
-            unshift @vals, $key;
-            bless( \@vals => 'Object::Declare::Katamari' );
-        } );
-        $replace->( "$sym\::AUTOLOAD" => sub {
-            # Handle "some_field is $some_value"
-            shift;
+    while ( my ( $sym, $prefix ) = each %$copula )
+    {
+        $replace->(
+            "UNIVERSAL::$sym" => sub {
 
-            my $field = our $AUTOLOAD;
-            return if $field =~ /DESTROY$/;
+                # Turn "is some_field" into "some_field is 1"
+                my ( $key, @vals ) =
+                    ref($prefix) ? $prefix->(@_) : ( $prefix . $_[0] => 1 )
+                    or return;
 
-            $field =~ s/^\Q$sym\E:://;
+                # If the copula returns a ready-to-use katamari object,
+                # don't try to roll it by ourself.
+                return $key
+                    if ref($key) && ref($key) eq 'Object::Declare::Katamari';
+                $key = $aliases->{$key} if $aliases and exists $aliases->{$key};
+                unshift @vals, $key;
+                bless( \@vals => 'Object::Declare::Katamari' );
+            }
+        );
+        $replace->(
+            "$sym\::AUTOLOAD" => sub {
 
-            my ($key, @vals) = ref($prefix) ? $prefix->($field, @_) : ($prefix.$field => @_) or return;
+                # Handle "some_field is $some_value"
+                shift;
 
-            $key = $aliases->{$key} if $aliases and exists $aliases->{$key};
-            unshift @vals, $key;
-            bless( \@vals, 'Object::Declare::Katamari' );
-        } );
+                my $field = our $AUTOLOAD;
+                return if $field =~ /DESTROY$/;
+
+                $field =~ s/^\Q$sym\E:://;
+
+                my ( $key, @vals ) =
+                    ref($prefix)
+                    ? $prefix->( $field, @_ )
+                    : ( $prefix . $field => @_ )
+                    or return;
+
+                $key = $aliases->{$key} if $aliases and exists $aliases->{$key};
+                unshift @vals, $key;
+                bless( \@vals, 'Object::Declare::Katamari' );
+            }
+        );
     }
 
     my @overridden = map { "$from\::$_" } keys %$mapping;
+
     # Now install the collector symbols from class mappings
     my $toggle_subs = sub {
-        foreach my $sym (@overridden) {
+        foreach my $sym (@overridden)
+        {
+            ## no critic (ProhibitNoStrict)
             no strict 'refs';
             no warnings 'redefine';
-            ($subs_replaced{$sym}, *$sym) = (*$sym{CODE}, $subs_replaced{$sym});
+            ( $subs_replaced{$sym}, *$sym ) =
+                ( *$sym{CODE}, $subs_replaced{$sym} );
+            ## use critic
         }
     };
 
-    while (my ($sym, $build) = each %$mapping) {
-        $replace->("$from\::$sym" => _make_object($build => \@objects, $toggle_subs));
+    while ( my ( $sym, $build ) = each %$mapping )
+    {
+        $replace->(
+            "$from\::$sym" => _make_object( $build => \@objects, $toggle_subs )
+        );
     }
 
     # Let's play Katamari!
     &$code;
 
     # Restore overriden subs
-    while (my ($sym, $code) = each %subs_replaced) {
+    while ( my ( $sym, $code ) = each %subs_replaced )
+    {
+        ## no critic (ProhibitNoStrict)
         no strict 'refs';
         no warnings 'redefine';
         *$sym = $code;
+        ## use critic
     }
 
     # In scalar context, returns hashref; otherwise preserve ordering
-    return(wantarray ? @objects : { @objects });
+    return ( wantarray ? @objects : {@objects} );
 }
 
 # Make a star from the Katamari!
-sub _make_object {
-    my ($build, $schema, $toggle_subs) = @_;
+sub _make_object
+{
+    my ( $build, $schema, $toggle_subs ) = @_;
 
     return sub {
+
         # Restore overriden subs
+        ## no critic (ProhibitNoStrict)
         no strict 'refs';
         no warnings 'redefine';
+        ## use critic
 
         my $name   = ( ref( $_[0] ) ? undef : shift );
         my $args   = \@_;
-        my $damacy = bless(sub {
-            $toggle_subs->();
+        my $damacy = bless(
+            sub {
+                $toggle_subs->();
 
-            my $rv = $build->(
-                ( $_[0] ? ( name => $_[0] ) : () ),
-                map { $_->unroll } @$args
-            );
+                my $rv = $build->(
+                    ( $_[0] ? ( name => $_[0] ) : () ),
+                    map { $_->unroll } @$args
+                );
 
-            $toggle_subs->();
+                $toggle_subs->();
 
-            return $rv;
-        } => 'Object::Declare::Damacy');
+                return $rv;
+            } => 'Object::Declare::Damacy'
+        );
 
-        if (wantarray) {
+        if (wantarray)
+        {
             return ($damacy);
-        } else {
+        }
+        else
+        {
             push @$schema, $name => $damacy->($name);
         }
     };
@@ -200,34 +252,40 @@ package Object::Declare::Katamari;
 
 use overload "!" => \&negation, fallback => 1;
 
-sub negation {
-    my @katamari = @{$_[0]} or return ();
+sub negation
+{
+    my @katamari = @{ $_[0] } or return ();
     $katamari[1] = !$katamari[1];
-    return bless(\@katamari, ref($_[0]));
+    return bless( \@katamari, ref( $_[0] ) );
 }
 
 # Unroll a Katamari structure into constructor arguments.
-sub unroll {
-    my @katamari = @{$_[0]} or return ();
-    my $field = shift @katamari or return ();
+sub unroll
+{
+    my @katamari = @{ $_[0] }      or return ();
+    my $field    = shift @katamari or return ();
     my @unrolled;
 
     unshift @unrolled, pop(@katamari)->unroll
-        while ref($katamari[-1]) eq __PACKAGE__;
+        while ref( $katamari[-1] ) eq __PACKAGE__;
 
-    if (@katamari == 1) {
+    if ( @katamari == 1 )
+    {
         # single value: "is foo"
-        if ( ref( $katamari[0] ) eq 'Object::Declare::Damacy' ) {
+        if ( ref( $katamari[0] ) eq 'Object::Declare::Damacy' )
+        {
             $katamari[0] = $katamari[0]->($field);
         }
-        return($field => @katamari, @unrolled);
+        return ( $field => @katamari, @unrolled );
     }
-    else {
+    else
+    {
         # Multiple values: "are qw( foo bar baz )"
-        foreach my $kata (@katamari) {
+        foreach my $kata (@katamari)
+        {
             $kata = $kata->() if ref($kata) eq 'Object::Declare::Damacy';
         }
-        return($field => \@katamari, @unrolled);
+        return ( $field => \@katamari, @unrolled );
     }
 }
 
